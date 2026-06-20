@@ -1,155 +1,230 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>Shared Progress Tracker</title>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>13 Reasons Why • Progress Tracker</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-app.js";
+    import { getDatabase, ref, onValue, set } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-database.js";
 
-<style>
-    body {
-        font-family: Arial, sans-serif;
-        background: #0f0f1a;
-        color: white;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        padding: 30px;
-        gap: 20px;
+    const firebaseConfig = {
+      apiKey: "AIzaSyAa3rl2MqU4U5bXfUjgNTy31uZ_vqnqFTo",
+      authDomain: "reasons-ae457.firebaseapp.com",
+      projectId: "reasons-ae457",
+      storageBucket: "reasons-ae457.firebasestorage.app",
+      messagingSenderId: "677542013885",
+      appId: "1:677542013885:web:03784914e97d7796abc0d4"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getDatabase(app);
+
+    // Season lengths
+    const seasonLengths = [13, 13, 13, 10];
+    const totalEpisodes = seasonLengths.reduce((a, b) => a + b, 0); // 49
+
+    function calculateProgress(season, episode) {
+      let completed = 0;
+      for (let i = 0; i < season - 1; i++) {
+        completed += seasonLengths[i];
+      }
+      completed += Math.max(0, episode);
+      return Math.min(100, Math.round((completed / totalEpisodes) * 100));
     }
 
-    .card, .slider-section {
-        background: #1b1b2a;
-        padding: 18px;
-        border-radius: 12px;
-        width: 320px;
-        text-align: center;
+    function episodeToString(season, episode) {
+      return `S${season} E${episode}`;
     }
 
-    .slider-title {
-        display: flex;
-        justify-content: space-between;
-        margin-bottom: 10px;
-        font-weight: bold;
+    // DOM elements
+    let zaniekeSeason = 1, zaniekeEpisode = 1;
+    let ayushmanSeason = 1, ayushmanEpisode = 1;
+
+    // Initialize Firebase listeners
+    function initFirebase() {
+      const zaniekeRef = ref(db, 'zanieke');
+      const ayushmanRef = ref(db, 'ayushman');
+
+      onValue(zaniekeRef, (snapshot) => {
+        const data = snapshot.val() || { season: 1, episode: 1 };
+        zaniekeSeason = data.season;
+        zaniekeEpisode = data.episode;
+        updateUI('zanieke');
+      });
+
+      onValue(ayushmanRef, (snapshot) => {
+        const data = snapshot.val() || { season: 1, episode: 1 };
+        ayushmanSeason = data.season;
+        ayushmanEpisode = data.episode;
+        updateUI('ayushman');
+      });
     }
 
-    input[type="range"] {
-        width: 100%;
+    function updateUI(person) {
+      if (person === 'zanieke') {
+        document.getElementById('zanieke-status').textContent = episodeToString(zaniekeSeason, zaniekeEpisode);
+        const progress = calculateProgress(zaniekeSeason, zaniekeEpisode);
+        document.getElementById('zanieke-progress').style.width = `${progress}%`;
+        document.getElementById('zanieke-percent').textContent = `${progress}%`;
+      } else {
+        document.getElementById('ayushman-status').textContent = episodeToString(ayushmanSeason, ayushmanEpisode);
+        const progress = calculateProgress(ayushmanSeason, ayushmanEpisode);
+        document.getElementById('ayushman-progress').style.width = `${progress}%`;
+        document.getElementById('ayushman-percent').textContent = `${progress}%`;
+      }
     }
 
-    .progress-value {
-        color: #00ffcc;
+    function saveProgress(person) {
+      if (person === 'zanieke') {
+        set(ref(db, 'zanieke'), {
+          season: zaniekeSeason,
+          episode: zaniekeEpisode
+        });
+      } else {
+        set(ref(db, 'ayushman'), {
+          season: ayushmanSeason,
+          episode: ayushmanEpisode
+        });
+      }
     }
 
-    .footer-note {
-        opacity: 0.7;
-        font-size: 13px;
+    // Controls
+    function changeEpisode(person, delta) {
+      if (person === 'zanieke') {
+        zaniekeEpisode += delta;
+        if (zaniekeEpisode > seasonLengths[zaniekeSeason - 1]) {
+          if (zaniekeSeason < 4) {
+            zaniekeSeason++;
+            zaniekeEpisode = 1;
+          } else {
+            zaniekeEpisode = seasonLengths[3];
+          }
+        }
+        if (zaniekeEpisode < 1) {
+          if (zaniekeSeason > 1) {
+            zaniekeSeason--;
+            zaniekeEpisode = seasonLengths[zaniekeSeason - 1];
+          } else {
+            zaniekeEpisode = 1;
+          }
+        }
+        updateUI('zanieke');
+        saveProgress('zanieke');
+      } else {
+        ayushmanEpisode += delta;
+        if (ayushmanEpisode > seasonLengths[ayushmanSeason - 1]) {
+          if (ayushmanSeason < 4) {
+            ayushmanSeason++;
+            ayushmanEpisode = 1;
+          } else {
+            ayushmanEpisode = seasonLengths[3];
+          }
+        }
+        if (ayushmanEpisode < 1) {
+          if (ayushmanSeason > 1) {
+            ayushmanSeason--;
+            ayushmanEpisode = seasonLengths[ayushmanSeason - 1];
+          } else {
+            ayushmanEpisode = 1;
+          }
+        }
+        updateUI('ayushman');
+        saveProgress('ayushman');
+      }
     }
-</style>
+
+    function changeSeason(person, delta) {
+      if (person === 'zanieke') {
+        zaniekeSeason = Math.max(1, Math.min(4, zaniekeSeason + delta));
+        zaniekeEpisode = Math.min(zaniekeEpisode, seasonLengths[zaniekeSeason - 1]);
+        updateUI('zanieke');
+        saveProgress('zanieke');
+      } else {
+        ayushmanSeason = Math.max(1, Math.min(4, ayushmanSeason + delta));
+        ayushmanEpisode = Math.min(ayushmanEpisode, seasonLengths[ayushmanSeason - 1]);
+        updateUI('ayushman');
+        saveProgress('ayushman');
+      }
+    }
+
+    // Make functions global
+    window.changeEpisode = changeEpisode;
+    window.changeSeason = changeSeason;
+
+    // Initialize on load
+    window.onload = () => {
+      initFirebase();
+    };
+  </script>
 </head>
+<body class="bg-zinc-950 text-white min-h-screen">
+  <div class="max-w-4xl mx-auto p-6">
+    <h1 class="text-4xl font-bold text-center mb-2">13 Reasons Why</h1>
+    <p class="text-center text-zinc-400 mb-10">Live Progress Tracker</p>
 
-<body>
+    <!-- Zanieke -->
+    <div class="mb-12 bg-zinc-900 rounded-3xl p-8">
+      <div class="flex items-center justify-between mb-6">
+        <div>
+          <h2 class="text-3xl font-semibold">Zanieke</h2>
+          <p id="zanieke-status" class="text-2xl text-emerald-400 font-mono">S1 E1</p>
+        </div>
+        <div class="text-right">
+          <button onclick="changeSeason('zanieke', -1)" class="bg-zinc-800 hover:bg-zinc-700 px-4 py-2 rounded-xl text-sm mr-2">← Season</button>
+          <button onclick="changeSeason('zanieke', 1)" class="bg-zinc-800 hover:bg-zinc-700 px-4 py-2 rounded-xl text-sm">Season →</button>
+        </div>
+      </div>
 
-<div class="card">
-    <h2>❤️ Zanieke</h2>
-    <div id="info1">0 / 49 episodes</div>
-</div>
+      <div class="h-6 bg-zinc-800 rounded-2xl overflow-hidden mb-3">
+        <div id="zanieke-progress" class="h-full bg-gradient-to-r from-emerald-400 to-cyan-400 w-0 transition-all duration-500"></div>
+      </div>
 
-<div class="card">
-    <h2>💙 Ayushman</h2>
-    <div id="info2">0 / 49 episodes</div>
-</div>
+      <div class="flex justify-between text-sm text-zinc-400">
+        <span>0%</span>
+        <span id="zanieke-percent">0%</span>
+        <span>100%</span>
+      </div>
 
-<div class="slider-section">
-    <div class="slider-title">
-        <span>❤️ Zanieke</span>
-        <span id="percent1" class="progress-value">0%</span>
+      <div class="flex gap-4 mt-6">
+        <button onclick="changeEpisode('zanieke', -1)" class="flex-1 bg-zinc-800 hover:bg-zinc-700 py-4 rounded-2xl text-lg font-medium">← Previous Episode</button>
+        <button onclick="changeEpisode('zanieke', 1)" class="flex-1 bg-emerald-600 hover:bg-emerald-500 py-4 rounded-2xl text-lg font-medium">Next Episode →</button>
+      </div>
     </div>
-    <input type="range" id="slider1" min="0" max="49" value="0">
-</div>
 
-<div class="slider-section">
-    <div class="slider-title">
-        <span>💙 Ayushman</span>
-        <span id="percent2" class="progress-value">0%</span>
+    <!-- Ayushman -->
+    <div class="bg-zinc-900 rounded-3xl p-8">
+      <div class="flex items-center justify-between mb-6">
+        <div>
+          <h2 class="text-3xl font-semibold">Ayushman</h2>
+          <p id="ayushman-status" class="text-2xl text-violet-400 font-mono">S1 E1</p>
+        </div>
+        <div class="text-right">
+          <button onclick="changeSeason('ayushman', -1)" class="bg-zinc-800 hover:bg-zinc-700 px-4 py-2 rounded-xl text-sm mr-2">← Season</button>
+          <button onclick="changeSeason('ayushman', 1)" class="bg-zinc-800 hover:bg-zinc-700 px-4 py-2 rounded-xl text-sm">Season →</button>
+        </div>
+      </div>
+
+      <div class="h-6 bg-zinc-800 rounded-2xl overflow-hidden mb-3">
+        <div id="ayushman-progress" class="h-full bg-gradient-to-r from-violet-400 to-fuchsia-400 w-0 transition-all duration-500"></div>
+      </div>
+
+      <div class="flex justify-between text-sm text-zinc-400">
+        <span>0%</span>
+        <span id="ayushman-percent">0%</span>
+        <span>100%</span>
+      </div>
+
+      <div class="flex gap-4 mt-6">
+        <button onclick="changeEpisode('ayushman', -1)" class="flex-1 bg-zinc-800 hover:bg-zinc-700 py-4 rounded-2xl text-lg font-medium">← Previous Episode</button>
+        <button onclick="changeEpisode('ayushman', 1)" class="flex-1 bg-violet-600 hover:bg-violet-500 py-4 rounded-2xl text-lg font-medium">Next Episode →</button>
+      </div>
     </div>
-    <input type="range" id="slider2" min="0" max="49" value="0">
-</div>
 
-<div class="footer-note">
-    49 Episodes Total • Live Firebase Sync
-</div>
-
-<!-- FIREBASE -->
-<script type="module">
-import { initializeApp } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-app.js";
-import { getDatabase, ref, onValue, set, update } 
-from "https://www.gstatic.com/firebasejs/12.15.0/firebase-database.js";
-
-/* 🔥 YOUR CONFIG (FIXED) */
-const firebaseConfig = {
-    apiKey: "AIzaSyAa3rl2MqU4U5bXfUjgNTy31uZ_vqnqFTo",
-    authDomain: "reasons-ae457.firebaseapp.com",
-    databaseURL: "https://reasons-ae457-default-rtdb.firebaseio.com",
-    projectId: "reasons-ae457",
-    storageBucket: "reasons-ae457.firebasestorage.app",
-    messagingSenderId: "677542013885",
-    appId: "1:677542013885:web:03784914e97d7796abc0d4"
-};
-
-const app = initializeApp(firebaseConfig);
-const db = getDatabase(app);
-const dataRef = ref(db, "progress");
-
-/* UI */
-const slider1 = document.getElementById("slider1");
-const slider2 = document.getElementById("slider2");
-
-const percent1 = document.getElementById("percent1");
-const percent2 = document.getElementById("percent2");
-
-const info1 = document.getElementById("info1");
-const info2 = document.getElementById("info2");
-
-const TOTAL = 49;
-
-/* 🔴 REALTIME LISTENER */
-onValue(dataRef, (snapshot) => {
-    const data = snapshot.val();
-
-    if (!data) return;
-
-    slider1.value = data.z ?? 0;
-    slider2.value = data.a ?? 0;
-
-    updateUI(data.z ?? 0, data.a ?? 0);
-});
-
-/* 🔴 WRITE (IMPORTANT FIX: ALWAYS WRITE BOTH VALUES) */
-function push() {
-    update(dataRef, {
-        z: parseInt(slider1.value),
-        a: parseInt(slider2.value)
-    });
-}
-
-slider1.addEventListener("input", push);
-slider2.addEventListener("input", push);
-
-/* UI */
-function updateUI(z, a) {
-    percent1.textContent = Math.round((z / TOTAL) * 100) + "%";
-    percent2.textContent = Math.round((a / TOTAL) * 100) + "%";
-
-    info1.textContent = `${z} / ${TOTAL} episodes`;
-    info2.textContent = `${a} / ${TOTAL} episodes`;
-}
-
-/* INIT (ONLY IF EMPTY) */
-set(dataRef, {
-    z: 0,
-    a: 0
-});
-</script>
-
+    <div class="text-center text-xs text-zinc-500 mt-12">
+      Updates live across all devices • Powered by Firebase
+    </div>
+  </div>
 </body>
 </html>
