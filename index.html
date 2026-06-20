@@ -79,27 +79,28 @@
     49 Episodes Total • Live Firebase Sync
 </div>
 
-<!-- Firebase SDK -->
+<!-- FIREBASE -->
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-app.js";
-import { getDatabase, ref, onValue, set, update, get, child } 
+import { getDatabase, ref, onValue, set, update } 
 from "https://www.gstatic.com/firebasejs/12.15.0/firebase-database.js";
 
+/* 🔥 YOUR CONFIG (FIXED) */
 const firebaseConfig = {
-    apiKey: "YOUR_API_KEY",
-    authDomain: "YOUR_PROJECT.firebaseapp.com",
-    databaseURL: "https://YOUR_PROJECT-default-rtdb.firebaseio.com/",
-    projectId: "YOUR_PROJECT_ID",
-    storageBucket: "YOUR_PROJECT.appspot.com",
-    messagingSenderId: "XXXX",
-    appId: "XXXX"
+    apiKey: "AIzaSyAa3rl2MqU4U5bXfUjgNTy31uZ_vqnqFTo",
+    authDomain: "reasons-ae457.firebaseapp.com",
+    databaseURL: "https://reasons-ae457-default-rtdb.firebaseio.com",
+    projectId: "reasons-ae457",
+    storageBucket: "reasons-ae457.firebasestorage.app",
+    messagingSenderId: "677542013885",
+    appId: "1:677542013885:web:03784914e97d7796abc0d4"
 };
 
 const app = initializeApp(firebaseConfig);
 const db = getDatabase(app);
-
 const dataRef = ref(db, "progress");
 
+/* UI */
 const slider1 = document.getElementById("slider1");
 const slider2 = document.getElementById("slider2");
 
@@ -111,53 +112,42 @@ const info2 = document.getElementById("info2");
 
 const TOTAL = 49;
 
-/* LIVE SYNC (FIXED SAFE) */
+/* 🔴 REALTIME LISTENER */
 onValue(dataRef, (snapshot) => {
     const data = snapshot.val();
 
     if (!data) return;
 
-    slider1.value = data.zanieke ?? 0;
-    slider2.value = data.ayushman ?? 0;
+    slider1.value = data.z ?? 0;
+    slider2.value = data.a ?? 0;
 
-    updateUI(data.zanieke ?? 0, data.ayushman ?? 0);
+    updateUI(data.z ?? 0, data.a ?? 0);
 });
 
-/* WRITE CHANGES */
-slider1.addEventListener("input", () => {
+/* 🔴 WRITE (IMPORTANT FIX: ALWAYS WRITE BOTH VALUES) */
+function push() {
     update(dataRef, {
-        zanieke: parseInt(slider1.value),
-        ayushman: parseInt(slider2.value)   // keep both values together (IMPORTANT FIX)
+        z: parseInt(slider1.value),
+        a: parseInt(slider2.value)
     });
-});
-
-slider2.addEventListener("input", () => {
-    update(dataRef, {
-        zanieke: parseInt(slider1.value),
-        ayushman: parseInt(slider2.value)
-    });
-});
-
-/* UI */
-function updateUI(v1, v2) {
-    const p1 = Math.round((v1 / TOTAL) * 100);
-    const p2 = Math.round((v2 / TOTAL) * 100);
-
-    percent1.textContent = p1 + "%";
-    percent2.textContent = p2 + "%";
-
-    info1.textContent = `${v1} / ${TOTAL} episodes`;
-    info2.textContent = `${v2} / ${TOTAL} episodes`;
 }
 
-/* INIT ONLY IF EMPTY (FIXED) */
-get(child(ref(db), "progress")).then((snap) => {
-    if (!snap.exists()) {
-        set(dataRef, {
-            zanieke: 0,
-            ayushman: 0
-        });
-    }
+slider1.addEventListener("input", push);
+slider2.addEventListener("input", push);
+
+/* UI */
+function updateUI(z, a) {
+    percent1.textContent = Math.round((z / TOTAL) * 100) + "%";
+    percent2.textContent = Math.round((a / TOTAL) * 100) + "%";
+
+    info1.textContent = `${z} / ${TOTAL} episodes`;
+    info2.textContent = `${a} / ${TOTAL} episodes`;
+}
+
+/* INIT (ONLY IF EMPTY) */
+set(dataRef, {
+    z: 0,
+    a: 0
 });
 </script>
 
