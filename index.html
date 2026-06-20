@@ -23,10 +23,18 @@
 
     // Season lengths (episodes)
     const seasonLengths = [13, 13, 13, 10];
-    const totalEpisodes = seasonLengths.reduce((a, b) => a + b, 0); // 49
 
-    // Average episode length: ~55 minutes
-    const AVG_EPISODE_MINUTES = 55;
+    // Accurate episode lengths in minutes (as provided)
+    const episodeLengths = {
+      1: [54,52,57,57,59,52,54,54,59,50,54,62,58],
+      2: [60,60,57,57,57,57,56,57,57,55,58,56,70],
+      3: [56,57,60,58,59,57,49,51,55,53,54,59,72],
+      4: [59,57,59,58,56,61,59,57,59,98]
+    };
+
+    function getEpisodeLength(season, episode) {
+      return episodeLengths[season]?.[episode - 1] || 55;
+    }
 
     function calculateProgress(season, episode) {
       let completed = 0;
@@ -34,16 +42,20 @@
         completed += seasonLengths[i];
       }
       completed += Math.max(0, episode);
+      const totalEpisodes = 49;
       return Math.min(100, Math.round((completed / totalEpisodes) * 100));
     }
 
     function calculateWatchTime(season, episode, minutes = 0) {
-      let totalMinutes = 0;
-      for (let i = 0; i < season - 1; i++) {
-        totalMinutes += seasonLengths[i] * AVG_EPISODE_MINUTES;
+      let totalMinutes = minutes;
+      for (let s = 1; s < season; s++) {
+        for (let e = 1; e <= seasonLengths[s-1]; e++) {
+          totalMinutes += getEpisodeLength(s, e);
+        }
       }
-      totalMinutes += (episode - 1) * AVG_EPISODE_MINUTES;
-      totalMinutes += minutes;
+      for (let e = 1; e < episode; e++) {
+        totalMinutes += getEpisodeLength(season, e);
+      }
       const hours = Math.floor(totalMinutes / 60);
       const mins = totalMinutes % 60;
       return `${hours}h ${mins}m`;
@@ -57,16 +69,13 @@
     let ayushman = { season: 1, episode: 1, minutes: 0 };
 
     function initFirebase() {
-      const zaniekeRef = ref(db, 'zanieke');
-      const ayushmanRef = ref(db, 'ayushman');
-
-      onValue(zaniekeRef, (snapshot) => {
+      onValue(ref(db, 'zanieke'), (snapshot) => {
         const data = snapshot.val() || { season: 1, episode: 1, minutes: 0 };
         zanieke = data;
         updateUI('zanieke');
       });
 
-      onValue(ayushmanRef, (snapshot) => {
+      onValue(ref(db, 'ayushman'), (snapshot) => {
         const data = snapshot.val() || { season: 1, episode: 1, minutes: 0 };
         ayushman = data;
         updateUI('ayushman');
@@ -76,6 +85,7 @@
     function updateUI(person) {
       const data = person === 'zanieke' ? zanieke : ayushman;
       const prefix = person;
+      const epLength = getEpisodeLength(data.season, data.episode);
 
       document.getElementById(`${prefix}-status`).textContent = episodeToString(data.season, data.episode);
       
@@ -84,12 +94,8 @@
       document.getElementById(`${prefix}-progress`).style.width = `${progress}%`;
       document.getElementById(`${prefix}-percent`).textContent = `${progress}%`;
 
-      // Current episode time
-      const epLength = AVG_EPISODE_MINUTES;
-      document.getElementById(`${prefix}-current-time`).textContent = 
-        `${data.minutes} / ${epLength} min`;
-
-      // Current episode progress bar
+      // Current episode time & bar
+      document.getElementById(`${prefix}-current-time`).textContent = `${data.minutes} / ${epLength} min`;
       const epProgressPercent = Math.min(100, Math.round((data.minutes / epLength) * 100));
       document.getElementById(`${prefix}-ep-progress`).style.width = `${epProgressPercent}%`;
 
@@ -99,18 +105,14 @@
 
     function saveProgress(person) {
       const data = person === 'zanieke' ? zanieke : ayushman;
-      set(ref(db, person), { 
-        season: data.season, 
-        episode: data.episode, 
-        minutes: data.minutes 
-      });
+      set(ref(db, person), data);
     }
 
     function changeEpisode(person, delta) {
       const data = person === 'zanieke' ? zanieke : ayushman;
-      let episode = data.episode + delta;
-      let season = data.season;
+      let { season, episode } = data;
 
+      episode += delta;
       if (episode > seasonLengths[season - 1]) {
         if (season < 4) {
           season++;
@@ -118,7 +120,6 @@
         } else {
           episode = seasonLengths[3];
         }
-        data.minutes = 0;
       } else if (episode < 1) {
         if (season > 1) {
           season--;
@@ -126,13 +127,11 @@
         } else {
           episode = 1;
         }
-        data.minutes = 0;
-      } else {
-        data.minutes = 0;
       }
-
       data.season = season;
       data.episode = episode;
+      data.minutes = 0;
+
       updateUI(person);
       saveProgress(person);
     }
@@ -148,11 +147,10 @@
 
     function adjustMinutes(person, delta) {
       const data = person === 'zanieke' ? zanieke : ayushman;
-      const epLength = AVG_EPISODE_MINUTES;
+      const epLength = getEpisodeLength(data.season, data.episode);
       
       data.minutes = Math.max(0, Math.min(epLength, data.minutes + delta));
 
-      // Auto-advance if episode is finished
       if (data.minutes >= epLength) {
         changeEpisode(person, 1);
         return;
@@ -162,7 +160,6 @@
       saveProgress(person);
     }
 
-    // Make functions global
     window.changeEpisode = changeEpisode;
     window.changeSeason = changeSeason;
     window.adjustMinutes = adjustMinutes;
@@ -185,17 +182,14 @@
           <p id="zanieke-status" class="text-2xl text-emerald-400 font-mono">S1 E1</p>
         </div>
         <div class="flex gap-2">
-          <button onclick="changeSeason('zanieke', -1)" 
-                  class="bg-zinc-800 hover:bg-zinc-700 px-5 py-2.5 rounded-2xl text-sm flex-1 sm:flex-none">← Season</button>
-          <button onclick="changeSeason('zanieke', 1)" 
-                  class="bg-zinc-800 hover:bg-zinc-700 px-5 py-2.5 rounded-2xl text-sm flex-1 sm:flex-none">Season →</button>
+          <button onclick="changeSeason('zanieke', -1)" class="bg-zinc-800 hover:bg-zinc-700 px-5 py-2.5 rounded-2xl text-sm">← Season</button>
+          <button onclick="changeSeason('zanieke', 1)" class="bg-zinc-800 hover:bg-zinc-700 px-5 py-2.5 rounded-2xl text-sm">Season →</button>
         </div>
       </div>
 
       <!-- Overall Progress -->
       <div class="h-5 sm:h-6 bg-zinc-800 rounded-2xl overflow-hidden mb-3">
-        <div id="zanieke-progress"
-             class="h-full bg-gradient-to-r from-emerald-400 to-cyan-400 w-0 transition-all duration-500 rounded-r-2xl"></div>
+        <div id="zanieke-progress" class="h-full bg-gradient-to-r from-emerald-400 to-cyan-400 w-0 transition-all duration-500"></div>
       </div>
       <div class="flex justify-between text-xs sm:text-sm text-zinc-400 mb-6">
         <span>0%</span>
@@ -207,7 +201,7 @@
       <div class="mb-6">
         <div class="flex justify-between text-sm mb-2">
           <span class="text-zinc-400">Current Episode</span>
-          <span id="zanieke-current-time" class="font-mono text-emerald-400">0 / 55 min</span>
+          <span id="zanieke-current-time" class="font-mono text-emerald-400">0 / 54 min</span>
         </div>
         <div class="h-3 bg-zinc-800 rounded-full overflow-hidden">
           <div id="zanieke-ep-progress" class="h-full bg-emerald-400 w-0 transition-all"></div>
@@ -216,18 +210,17 @@
 
       <div class="flex items-center justify-between bg-zinc-950 rounded-2xl p-4 mb-6 text-sm">
         <div class="text-zinc-400">Total Watch Time</div>
-        <div id="zanieke-time" class="font-mono text-emerald-400 text-lg font-medium">0h 55m</div>
+        <div id="zanieke-time" class="font-mono text-emerald-400 text-lg font-medium">0h 0m</div>
       </div>
 
+      <!-- Buttons -->
       <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <button onclick="changeEpisode('zanieke', -1)" 
-                class="bg-zinc-800 hover:bg-zinc-700 py-4 rounded-2xl text-base font-medium">← Prev Episode</button>
-        <button onclick="changeEpisode('zanieke', 1)" 
-                class="bg-emerald-600 hover:bg-emerald-500 py-4 rounded-2xl text-base font-medium">Next Episode →</button>
-        <button onclick="adjustMinutes('zanieke', -5)" 
-                class="bg-zinc-800 hover:bg-zinc-700 py-4 rounded-2xl text-base font-medium">-5 min</button>
-        <button onclick="adjustMinutes('zanieke', 5)" 
-                class="bg-emerald-600 hover:bg-emerald-500 py-4 rounded-2xl text-base font-medium">+5 min</button>
+        <button onclick="changeEpisode('zanieke', -1)" class="bg-zinc-800 hover:bg-zinc-700 py-4 rounded-2xl text-base font-medium">← Prev</button>
+        <button onclick="changeEpisode('zanieke', 1)" class="bg-emerald-600 hover:bg-emerald-500 py-4 rounded-2xl text-base font-medium">Next →</button>
+        <button onclick="adjustMinutes('zanieke', -5)" class="bg-zinc-700 hover:bg-zinc-600 py-3 rounded-2xl text-sm">-5 min</button>
+        <button onclick="adjustMinutes('zanieke', 5)" class="bg-emerald-600 hover:bg-emerald-500 py-3 rounded-2xl text-sm">+5 min</button>
+        <button onclick="adjustMinutes('zanieke', -1)" class="bg-zinc-700 hover:bg-zinc-600 py-3 rounded-2xl text-sm">-1 min</button>
+        <button onclick="adjustMinutes('zanieke', 1)" class="bg-emerald-600 hover:bg-emerald-500 py-3 rounded-2xl text-sm">+1 min</button>
       </div>
     </div>
 
@@ -239,17 +232,14 @@
           <p id="ayushman-status" class="text-2xl text-violet-400 font-mono">S1 E1</p>
         </div>
         <div class="flex gap-2">
-          <button onclick="changeSeason('ayushman', -1)" 
-                  class="bg-zinc-800 hover:bg-zinc-700 px-5 py-2.5 rounded-2xl text-sm flex-1 sm:flex-none">← Season</button>
-          <button onclick="changeSeason('ayushman', 1)" 
-                  class="bg-zinc-800 hover:bg-zinc-700 px-5 py-2.5 rounded-2xl text-sm flex-1 sm:flex-none">Season →</button>
+          <button onclick="changeSeason('ayushman', -1)" class="bg-zinc-800 hover:bg-zinc-700 px-5 py-2.5 rounded-2xl text-sm">← Season</button>
+          <button onclick="changeSeason('ayushman', 1)" class="bg-zinc-800 hover:bg-zinc-700 px-5 py-2.5 rounded-2xl text-sm">Season →</button>
         </div>
       </div>
 
       <!-- Overall Progress -->
       <div class="h-5 sm:h-6 bg-zinc-800 rounded-2xl overflow-hidden mb-3">
-        <div id="ayushman-progress"
-             class="h-full bg-gradient-to-r from-violet-400 to-fuchsia-400 w-0 transition-all duration-500 rounded-r-2xl"></div>
+        <div id="ayushman-progress" class="h-full bg-gradient-to-r from-violet-400 to-fuchsia-400 w-0 transition-all duration-500"></div>
       </div>
       <div class="flex justify-between text-xs sm:text-sm text-zinc-400 mb-6">
         <span>0%</span>
@@ -261,7 +251,7 @@
       <div class="mb-6">
         <div class="flex justify-between text-sm mb-2">
           <span class="text-zinc-400">Current Episode</span>
-          <span id="ayushman-current-time" class="font-mono text-violet-400">0 / 55 min</span>
+          <span id="ayushman-current-time" class="font-mono text-violet-400">0 / 54 min</span>
         </div>
         <div class="h-3 bg-zinc-800 rounded-full overflow-hidden">
           <div id="ayushman-ep-progress" class="h-full bg-violet-400 w-0 transition-all"></div>
@@ -270,23 +260,22 @@
 
       <div class="flex items-center justify-between bg-zinc-950 rounded-2xl p-4 mb-6 text-sm">
         <div class="text-zinc-400">Total Watch Time</div>
-        <div id="ayushman-time" class="font-mono text-violet-400 text-lg font-medium">0h 55m</div>
+        <div id="ayushman-time" class="font-mono text-violet-400 text-lg font-medium">0h 0m</div>
       </div>
 
+      <!-- Buttons -->
       <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <button onclick="changeEpisode('ayushman', -1)" 
-                class="bg-zinc-800 hover:bg-zinc-700 py-4 rounded-2xl text-base font-medium">← Prev Episode</button>
-        <button onclick="changeEpisode('ayushman', 1)" 
-                class="bg-violet-600 hover:bg-violet-500 py-4 rounded-2xl text-base font-medium">Next Episode →</button>
-        <button onclick="adjustMinutes('ayushman', -5)" 
-                class="bg-zinc-800 hover:bg-zinc-700 py-4 rounded-2xl text-base font-medium">-5 min</button>
-        <button onclick="adjustMinutes('ayushman', 5)" 
-                class="bg-violet-600 hover:bg-violet-500 py-4 rounded-2xl text-base font-medium">+5 min</button>
+        <button onclick="changeEpisode('ayushman', -1)" class="bg-zinc-800 hover:bg-zinc-700 py-4 rounded-2xl text-base font-medium">← Prev</button>
+        <button onclick="changeEpisode('ayushman', 1)" class="bg-violet-600 hover:bg-violet-500 py-4 rounded-2xl text-base font-medium">Next →</button>
+        <button onclick="adjustMinutes('ayushman', -5)" class="bg-zinc-700 hover:bg-zinc-600 py-3 rounded-2xl text-sm">-5 min</button>
+        <button onclick="adjustMinutes('ayushman', 5)" class="bg-violet-600 hover:bg-violet-500 py-3 rounded-2xl text-sm">+5 min</button>
+        <button onclick="adjustMinutes('ayushman', -1)" class="bg-zinc-700 hover:bg-zinc-600 py-3 rounded-2xl text-sm">-1 min</button>
+        <button onclick="adjustMinutes('ayushman', 1)" class="bg-violet-600 hover:bg-violet-500 py-3 rounded-2xl text-sm">+1 min</button>
       </div>
     </div>
 
-    <div class="text-center text-[10px] sm:text-xs text-zinc-500 mt-10">
-      Updates live on all devices • ~55 min per episode • +5 / -5 min tracking • Powered by Firebase
+    <div class="text-center text-xs text-zinc-500 mt-10">
+      Real-time sync • Accurate episode lengths • Powered by Firebase
     </div>
   </div>
 </body>
