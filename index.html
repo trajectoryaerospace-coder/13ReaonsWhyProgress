@@ -82,10 +82,9 @@
 <!-- Firebase SDK -->
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-app.js";
-import { getDatabase, ref, onValue, set, update } 
+import { getDatabase, ref, onValue, set, update, get, child } 
 from "https://www.gstatic.com/firebasejs/12.15.0/firebase-database.js";
 
-/* 🔴 PUT YOUR FIREBASE CONFIG HERE */
 const firebaseConfig = {
     apiKey: "YOUR_API_KEY",
     authDomain: "YOUR_PROJECT.firebaseapp.com",
@@ -99,10 +98,8 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const db = getDatabase(app);
 
-/* DATABASE PATH */
 const dataRef = ref(db, "progress");
 
-/* UI ELEMENTS */
 const slider1 = document.getElementById("slider1");
 const slider2 = document.getElementById("slider2");
 
@@ -114,30 +111,34 @@ const info2 = document.getElementById("info2");
 
 const TOTAL = 49;
 
-/* LISTEN FOR REALTIME UPDATES */
+/* LIVE SYNC (FIXED SAFE) */
 onValue(dataRef, (snapshot) => {
-    const data = snapshot.val() || { zanieke: 0, ayushman: 0 };
+    const data = snapshot.val();
 
-    slider1.value = data.zanieke;
-    slider2.value = data.ayushman;
+    if (!data) return;
 
-    updateUI(data.zanieke, data.ayushman);
+    slider1.value = data.zanieke ?? 0;
+    slider2.value = data.ayushman ?? 0;
+
+    updateUI(data.zanieke ?? 0, data.ayushman ?? 0);
 });
 
-/* UPDATE FIREBASE WHEN USER MOVES SLIDER */
+/* WRITE CHANGES */
 slider1.addEventListener("input", () => {
     update(dataRef, {
-        zanieke: parseInt(slider1.value)
+        zanieke: parseInt(slider1.value),
+        ayushman: parseInt(slider2.value)   // keep both values together (IMPORTANT FIX)
     });
 });
 
 slider2.addEventListener("input", () => {
     update(dataRef, {
+        zanieke: parseInt(slider1.value),
         ayushman: parseInt(slider2.value)
     });
 });
 
-/* UI UPDATE FUNCTION */
+/* UI */
 function updateUI(v1, v2) {
     const p1 = Math.round((v1 / TOTAL) * 100);
     const p2 = Math.round((v2 / TOTAL) * 100);
@@ -149,10 +150,14 @@ function updateUI(v1, v2) {
     info2.textContent = `${v2} / ${TOTAL} episodes`;
 }
 
-/* INIT DEFAULT DATA IF EMPTY */
-set(dataRef, {
-    zanieke: 0,
-    ayushman: 0
+/* INIT ONLY IF EMPTY (FIXED) */
+get(child(ref(db), "progress")).then((snap) => {
+    if (!snap.exists()) {
+        set(dataRef, {
+            zanieke: 0,
+            ayushman: 0
+        });
+    }
 });
 </script>
 
