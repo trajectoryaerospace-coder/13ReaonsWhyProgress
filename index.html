@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Shared Progress Tracker</title>
+
+<style>
+    body {
+        font-family: Arial, sans-serif;
+        background: #0f0f1a;
+        color: white;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        padding: 30px;
+        gap: 20px;
+    }
+
+    .card, .slider-section {
+        background: #1b1b2a;
+        padding: 18px;
+        border-radius: 12px;
+        width: 320px;
+        text-align: center;
+    }
+
+    .slider-title {
+        display: flex;
+        justify-content: space-between;
+        margin-bottom: 10px;
+        font-weight: bold;
+    }
+
+    input[type="range"] {
+        width: 100%;
+    }
+
+    .progress-value {
+        color: #00ffcc;
+    }
+
+    .footer-note {
+        opacity: 0.7;
+        font-size: 13px;
+    }
+</style>
+</head>
+
+<body>
+
+<div class="card">
+    <h2>❤️ Zanieke</h2>
+    <div id="info1">0 / 49 episodes</div>
+</div>
+
+<div class="card">
+    <h2>💙 Ayushman</h2>
+    <div id="info2">0 / 49 episodes</div>
+</div>
+
+<div class="slider-section">
+    <div class="slider-title">
+        <span>❤️ Zanieke</span>
+        <span id="percent1" class="progress-value">0%</span>
+    </div>
+    <input type="range" id="slider1" min="0" max="49" value="0">
+</div>
+
+<div class="slider-section">
+    <div class="slider-title">
+        <span>💙 Ayushman</span>
+        <span id="percent2" class="progress-value">0%</span>
+    </div>
+    <input type="range" id="slider2" min="0" max="49" value="0">
+</div>
+
+<div class="footer-note">
+    49 Episodes Total • Live Firebase Sync
+</div>
+
+<!-- Firebase SDK -->
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-app.js";
+import { getDatabase, ref, onValue, set, update } 
+from "https://www.gstatic.com/firebasejs/12.15.0/firebase-database.js";
+
+/* 🔴 PUT YOUR FIREBASE CONFIG HERE */
+const firebaseConfig = {
+    apiKey: "YOUR_API_KEY",
+    authDomain: "YOUR_PROJECT.firebaseapp.com",
+    databaseURL: "https://YOUR_PROJECT-default-rtdb.firebaseio.com/",
+    projectId: "YOUR_PROJECT_ID",
+    storageBucket: "YOUR_PROJECT.appspot.com",
+    messagingSenderId: "XXXX",
+    appId: "XXXX"
+};
+
+const app = initializeApp(firebaseConfig);
+const db = getDatabase(app);
+
+/* DATABASE PATH */
+const dataRef = ref(db, "progress");
+
+/* UI ELEMENTS */
+const slider1 = document.getElementById("slider1");
+const slider2 = document.getElementById("slider2");
+
+const percent1 = document.getElementById("percent1");
+const percent2 = document.getElementById("percent2");
+
+const info1 = document.getElementById("info1");
+const info2 = document.getElementById("info2");
+
+const TOTAL = 49;
+
+/* LISTEN FOR REALTIME UPDATES */
+onValue(dataRef, (snapshot) => {
+    const data = snapshot.val() || { zanieke: 0, ayushman: 0 };
+
+    slider1.value = data.zanieke;
+    slider2.value = data.ayushman;
+
+    updateUI(data.zanieke, data.ayushman);
+});
+
+/* UPDATE FIREBASE WHEN USER MOVES SLIDER */
+slider1.addEventListener("input", () => {
+    update(dataRef, {
+        zanieke: parseInt(slider1.value)
+    });
+});
+
+slider2.addEventListener("input", () => {
+    update(dataRef, {
+        ayushman: parseInt(slider2.value)
+    });
+});
+
+/* UI UPDATE FUNCTION */
+function updateUI(v1, v2) {
+    const p1 = Math.round((v1 / TOTAL) * 100);
+    const p2 = Math.round((v2 / TOTAL) * 100);
+
+    percent1.textContent = p1 + "%";
+    percent2.textContent = p2 + "%";
+
+    info1.textContent = `${v1} / ${TOTAL} episodes`;
+    info2.textContent = `${v2} / ${TOTAL} episodes`;
+}
+
+/* INIT DEFAULT DATA IF EMPTY */
+set(dataRef, {
+    zanieke: 0,
+    ayushman: 0
+});
+</script>
+
+</body>
+</html>
